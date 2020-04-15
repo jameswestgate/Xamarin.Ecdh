@@ -13,6 +13,13 @@ using Xamarin.Forms;
 
 namespace Xamarin.Ecdh
 {
+    public struct KeySetupParameters
+    {
+        public string EcdhParameters;
+        public string PrivateKey;
+    }
+
+
     // Learn more about making custom code visible in the Xamarin.Forms previewer
     // by visiting https://aka.ms/xamarinforms-previewer
     [DesignTimeVisible(false)]
@@ -35,8 +42,8 @@ namespace Xamarin.Ecdh
                 // Setup Alice's parameters and return the public information in base64 format
                 var aliceValues = SetupAlice();
 
-                if (!aliceValues.StartsWith("ECDH:")) throw new ApplicationException("Public Keys Values supplied are not in a valid format.");
-                var splits = (aliceValues.Substring(5).Split(","));
+                if (!aliceValues.EcdhParameters.StartsWith("ECDH:")) throw new ApplicationException("Public Keys Values supplied are not in a valid format.");
+                var splits = (aliceValues.EcdhParameters.Substring(5).Split(","));
                 var aliceP = new BigInteger(Convert.FromBase64String(splits[0]));
                 var aliceG = new BigInteger(Convert.FromBase64String(splits[1]));
 
@@ -60,7 +67,7 @@ namespace Xamarin.Ecdh
                 //START FULL ALICE AGREEMENT
 
                 //Get the private key back from base64 format
-                byte[] privateKeyRestored = Convert.FromBase64String(splits[3]);
+                byte[] privateKeyRestored = Convert.FromBase64String(aliceValues.PrivateKey);
 
                 AsymmetricKeyParameter privateKey = PrivateKeyFactory.CreateKey(privateKeyRestored);
 
@@ -88,7 +95,7 @@ namespace Xamarin.Ecdh
             }
         }
 
-        private string SetupAlice()
+        private KeySetupParameters SetupAlice()
         {
             IAsymmetricCipherKeyPairGenerator aliceKeyGen = GeneratorUtilities.GetKeyPairGenerator("ECDH");
             DHParametersGenerator aliceGenerator = new DHParametersGenerator();
@@ -101,7 +108,6 @@ namespace Xamarin.Ecdh
             //We only need to keep Alice's private key for now
             AsymmetricCipherKeyPair aliceKeyPair = aliceKeyGen.GenerateKeyPair();
 
-
             //https://stackoverflow.com/questions/5090624/bouncy-castle-rsa-transforming-keys-into-a-string-format/5092398
             PrivateKeyInfo privateKeyInfo = PrivateKeyInfoFactory.CreatePrivateKeyInfo(aliceKeyPair.Private);
 
@@ -109,7 +115,7 @@ namespace Xamarin.Ecdh
             byte[] serializedPrivateBytes = privateKeyInfo.ToAsn1Object().GetDerEncoded();
 
             // Convert to Base64 ..
-            string tuple4 = Convert.ToBase64String(serializedPrivateBytes);
+            string privateKey = Convert.ToBase64String(serializedPrivateBytes);
 
             //_aliceKeyAgree = AgreementUtilities.GetBasicAgreement(EcdhAlgorithm);
             //_aliceKeyAgree.Init(aliceKeyPair.Private);
@@ -125,7 +131,12 @@ namespace Xamarin.Ecdh
             //byte[] publicKeyDerRestored = Convert.FromBase64String(tuple3);
             //var temp = PublicKeyFactory.CreateKey(publicKeyDerRestored);
 
-            return $"ECDH:{tuple1},{tuple2},{tuple3},{tuple4}";
+            KeySetupParameters result;
+
+            result.EcdhParameters = $"ECDH:{tuple1},{tuple2},{tuple3}";
+            result.PrivateKey = privateKey;
+
+            return result;
         }
     }
 }
