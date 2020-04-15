@@ -22,9 +22,6 @@ namespace Xamarin.Ecdh
         const int EcdhKeyBitSize = 256;
         const int EcdhDefaultPrimeProbability = 30;
 
-
-        private IBasicAgreement _aliceKeyAgree;
-
         public MainPage()
         {
             InitializeComponent();
@@ -60,8 +57,18 @@ namespace Xamarin.Ecdh
                 bobKeyAgree.Init(bobKeyPair.Private);
                 //END SETUP BOB
 
+                //START FULL ALICE AGREEMENT
+
+                //Get the private key back from base64 format
+                byte[] privateKeyRestored = Convert.FromBase64String(splits[3]);
+
+                AsymmetricKeyParameter privateKey = PrivateKeyFactory.CreateKey(privateKeyRestored);
+
                 //Alice and Bob can individually calculate a shared key
-                BigInteger aliceAgree = _aliceKeyAgree.CalculateAgreement(bobKeyPair.Public);
+                var aliceKeyAgree = AgreementUtilities.GetBasicAgreement(EcdhAlgorithm);
+                aliceKeyAgree.Init(privateKey);
+
+                BigInteger aliceAgree = aliceKeyAgree.CalculateAgreement(bobKeyPair.Public);
                 BigInteger bobAgree = bobKeyAgree.CalculateAgreement(alicePbk);
 
                 if (!aliceAgree.Equals(bobAgree))
@@ -91,16 +98,24 @@ namespace Xamarin.Ecdh
             KeyGenerationParameters aliceKGP = new DHKeyGenerationParameters(new SecureRandom(), aliceParameters);
             aliceKeyGen.Init(aliceKGP);
 
-            //Alice keeps the key agreement variable in memory for now
+            //We only need to keep Alice's private key for now
             AsymmetricCipherKeyPair aliceKeyPair = aliceKeyGen.GenerateKeyPair();
-            _aliceKeyAgree = AgreementUtilities.GetBasicAgreement(EcdhAlgorithm);
-            _aliceKeyAgree.Init(aliceKeyPair.Private);
+
+
+            //https://stackoverflow.com/questions/5090624/bouncy-castle-rsa-transforming-keys-into-a-string-format/5092398
+            PrivateKeyInfo privateKeyInfo = PrivateKeyInfoFactory.CreatePrivateKeyInfo(aliceKeyPair.Private);
+
+            // Write out an RSA private key with it's asscociated information as described in PKCS8.
+            byte[] serializedPrivateBytes = privateKeyInfo.ToAsn1Object().GetDerEncoded();
+
+            // Convert to Base64 ..
+            string tuple4 = Convert.ToBase64String(serializedPrivateBytes);
+
+            //_aliceKeyAgree = AgreementUtilities.GetBasicAgreement(EcdhAlgorithm);
+            //_aliceKeyAgree.Init(aliceKeyPair.Private);
 
             var tuple1 = Convert.ToBase64String(aliceParameters.P.ToByteArray());
             var tuple2 = Convert.ToBase64String(aliceParameters.G.ToByteArray());
-
-            //Restore as Bigintegers like so
-            //var pRestore = new BigInteger(tuple1);
 
             byte[] publicKeyDer = SubjectPublicKeyInfoFactory.CreateSubjectPublicKeyInfo(aliceKeyPair.Public).GetDerEncoded();
             var tuple3 = Convert.ToBase64String(publicKeyDer);
@@ -110,7 +125,7 @@ namespace Xamarin.Ecdh
             //byte[] publicKeyDerRestored = Convert.FromBase64String(tuple3);
             //var temp = PublicKeyFactory.CreateKey(publicKeyDerRestored);
 
-            return $"ECDH:{tuple1},{tuple2},{tuple3}";
+            return $"ECDH:{tuple1},{tuple2},{tuple3},{tuple4}";
         }
     }
 }
